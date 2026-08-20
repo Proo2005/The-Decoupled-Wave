@@ -3,11 +3,14 @@ import pandas as pd
 import numpy as np
 import joblib
 import plotly.graph_objects as go
+from PIL import Image
+
 
 # 1. Interface Configuration
 st.set_page_config(page_title="Epidemic Forecasting Dashboard", layout="wide")
 st.title("Hybrid ARIMA-XGBoost Forecasting")
 st.markdown("Upload a chronological CSV dataset to dynamically generate out-of-sample predictions.")
+
 
 # 2. Model Initialization
 @st.cache_resource

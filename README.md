@@ -1,7 +1,11 @@
 
-![Logo](./logo.png)
-
 # Hybrid ARIMA-XGBoost Epidemiological Forecasting Framework
+
+<img src="./logo.png" alt="App Logo" width="60" height="60" align="left" style="margin-right: 15px;"/>
+
+A CPU-optimized, decoupled hybrid forecasting architecture designed to predict infectious disease transmission trajectories by combining statistical linear extraction with machine learning-driven residual mapping.
+
+<br clear="left"/>
 
 A CPU-optimized, decoupled hybrid forecasting architecture designed to predict infectious disease transmission trajectories by combining statistical linear extraction with machine learning-driven residual mapping.
 
