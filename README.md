@@ -61,6 +61,8 @@ The architecture was evaluated across out-of-sample validation sequences, yieldi
 The tight convergence between MAE and RMSE indicates robust generalization capabilities, demonstrating that the gradient boosting layer effectively mitigates extreme prediction errors and captures stochastic variance without overfitting.
 
 ---
+<img src="./images/Epidemilogical forecasting  Hybrid ARIMA_XGBoost vs Actuals.png" alt="Screenshot" width="100" height="100" align="center" />
+<br clear="left"/>
 
 ## 5. Local Installation & Execution
 
@@ -160,3 +162,9 @@ disease_detecton_model/
 
 For support, email prochak1922@gmail.com or connect via [linkedin](https://www.linkedin.com/in/prodipta-chakraborty-5484b722a/).
 
+
+## Links
+
+- [@World Health Organization](https://data.who.int/dashboards/covid19/data)
+
+- [@IEEE Xplore](https://ieeexplore.ieee.org/search/searchresult.jsp?queryText=epidemic%20forecasting&highlight=true&returnFacets=ALL&returnType=SEARCH&matchPubs=true&ranges=2022_2026_Year)
