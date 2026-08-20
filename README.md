@@ -61,7 +61,7 @@ The architecture was evaluated across out-of-sample validation sequences, yieldi
 The tight convergence between MAE and RMSE indicates robust generalization capabilities, demonstrating that the gradient boosting layer effectively mitigates extreme prediction errors and captures stochastic variance without overfitting.
 
 ---
-<img src="./images/Epidemilogical forecasting  Hybrid ARIMA_XGBoost vs Actuals.png" alt="Screenshot" width="100" height="100" align="center" />
+<img src="./images/Epidemilogical forecasting  Hybrid ARIMA_XGBoost vs Actuals.png"  align="center" />
 <br clear="left"/>
 
 ## 5. Local Installation & Execution
