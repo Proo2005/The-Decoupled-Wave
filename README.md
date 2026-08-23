@@ -51,12 +51,13 @@ where $d$ represents the dampening factor preventing peak overshooting.
 
 The architecture was evaluated across out-of-sample(unkown sample) validation sequences, yielding the following performance metrics:
 
-* **Validation Mean Absolute Error (MAE):** $3530.6986
-* **Validation Root Mean Squared Error (RMSE):** $201.3090
-* **Test-to-Train RMSE Ratio:** $0.06x
-* **Training sMAPE:** $20.13%
-* **Testing sMAPE;** $69.33%
-The tight convergence between MAE and RMSE indicates robust generalization capabilities, demonstrating that the gradient boosting layer effectively mitigates extreme prediction errors and captures stochastic variance without overfitting.
+* **Validation Mean Absolute Error (MAE):** 3530.6986
+* **Validation Root Mean Squared Error (RMSE):** 201.3090
+* **Test-to-Train RMSE Ratio:** 0.06x
+* **Training sMAPE:** 20.13%
+* **Testing sMAPE;** 69.33%
+
+* The tight convergence between MAE and RMSE indicates robust generalization capabilities, demonstrating that the gradient boosting layer effectively mitigates extreme prediction errors and captures stochastic variance without overfitting.
 
 ### Epidemilogical forecasting  Hybrid ARIMA_XGBoost vs Actuals Graph Visualization
 <img src="./images/Epidemilogical forecasting  Hybrid ARIMA_XGBoost vs Actuals.png"  align="center" />
