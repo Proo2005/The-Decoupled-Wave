@@ -1,29 +1,39 @@
-                                                    # check dataset
+# 1. Check, Clean, and Load Dataset
 import pandas as pd
+import numpy as np
+import pmdarima as pm
+from xgboost import XGBRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+import matplotlib.pyplot as plt
+import joblib
+
 file_path = "dataset/who_dataset.csv"
 df = pd.read_csv(file_path)
 df['Date_reported'] = pd.to_datetime(df['Date_reported'])
 df.set_index('Date_reported', inplace=True)
 df.sort_index(inplace=True)
 df_region = df[df['Country'] == 'India']
+
+# Extract target and drop any NaN or infinite values immediately
 target_series = df_region['New_cases'].dropna()
+target_series = target_series.replace([np.inf, -np.inf], np.nan).dropna()
 
 print(f"Data successfully loaded. Series shape: {target_series.shape}")
 
+# Apply Log Transformation safely using log1p
+log_target_series = np.log1p(target_series)
+log_target_series = log_target_series.replace([np.inf, -np.inf], np.nan).dropna()
 
-
-                                 # Linear Trend Extraction and Residual Isolation
-
-import pmdarima as pm
-train_size = int(len(target_series) * 0.8)
-train_series, test_series = target_series[:train_size], target_series[train_size:]
+# 2. Linear Trend Extraction and Residual Isolation (on Log scale)
+train_size = int(len(log_target_series) * 0.8)
+train_series, test_series = log_target_series[:train_size], log_target_series[train_size:]
 
 print(f"Training shape: {train_series.shape} | Testing shape: {test_series.shape}")
-print("Initiating Auto-ARIMA optimization (computational time required)...")
+print("Initiating Auto-ARIMA optimization on log-transformed data...")
 arima_model = pm.auto_arima(
     train_series,
-    seasonal=False,        # Evaluated as non-seasonal for baseline optimization
-    trace=True,            # Outputs the hyperparameter search matrix
+    seasonal=False,
+    trace=True,
     error_action='ignore',
     suppress_warnings=True,
     stepwise=True
@@ -32,98 +42,75 @@ arima_model = pm.auto_arima(
 print(f"Optimal ARIMA Configuration: {arima_model.order}")
 linear_predictions = arima_model.predict_in_sample()
 residuals = train_series - linear_predictions
+residuals = residuals.dropna() # Ensure no NaNs from ARIMA burn-in period
 
 print(f"Non-linear residuals successfully isolated. Shape: {residuals.shape}")
 
-
-
-                              #4  Feature Augmentation and Non-Linear Regression
-
-import numpy as np
-from xgboost import XGBRegressor
-
-
+# 3. Feature Augmentation and Non-Linear Regression
 def create_supervised_features(series, lag=7):
-    """Engineers sequential lag predictors from a univariate time-series."""
     X, y = [], []
     for i in range(len(series) - lag):
         X.append(series.iloc[i:(i + lag)].values)
         y.append(series.iloc[i + lag])
     return np.array(X), np.array(y)
 
-# 2. Construct the supervised learning matrix
-# Utilizing a 7-day lag window captures weekly reporting cyclicality
 temporal_lag = 7
 X_train, y_train = create_supervised_features(residuals, lag=temporal_lag)
 
-print(f"Supervised Feature Matrix X_train shape: {X_train.shape}")
-print(f"Target Vector y_train shape: {y_train.shape}")
-
-# 3. Configure the CPU-optimized XGBoost regressor
 print("Initiating XGBoost non-linear regression training...")
 xgb_model = XGBRegressor(
-    n_estimators=100,
-    learning_rate=0.1,
-    max_depth=4,
+    n_estimators=150,
+    learning_rate=0.05,
+    max_depth=5,
     objective='reg:squarederror',
-    n_jobs=-1  # Maximizes parallel CPU threading
+    n_jobs=-1
 )
 
-# 4. Fit the algorithm exclusively on the isolated non-linear errors
 xgb_model.fit(X_train, y_train)
-
 print("XGBoost training complete.")
 
+# 4. Rolling One-Step-Ahead Hybrid Recombination with Dampened Residuals
+print("Generating dampened rolling out-of-sample predictions...")
 
-                          #5: Hybrid Recombination and Error Quantification
+log_train_full = log_target_series[:train_size]
+log_test_full = log_target_series[train_size:]
 
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-import numpy as np
-import pandas as pd
+full_series = log_target_series.values
+hybrid_preds_log = []
+dampening_factor = 0.45  # Scales back over-correction during rapid surges
 
-# 1. Generate linear baseline predictions for the testing partition
-print("Generating Auto-ARIMA baseline forecasts...")
-test_linear_predictions = arima_model.predict(n_periods=len(test_series))
+for i in range(len(log_test_full)):
+    current_idx = train_size + i
+    history = full_series[:current_idx]
+    
+    if len(history) >= temporal_lag:
+        lag_window = history[-temporal_lag:]
+        next_residual_pred = xgb_model.predict(lag_window.reshape(1, -1))[0]
+    else:
+        next_residual_pred = 0.0
+        
+    base_val = history[-1]
+    # Apply dampening to prevent overshooting peaks
+    pred_log = base_val + (next_residual_pred * dampening_factor)
+    hybrid_preds_log.append(pred_log)
 
-# 2. Extract raw numpy arrays to strictly bypass Pandas index misalignment
-raw_test_actuals = test_series.values.flatten()
-raw_test_baseline = test_linear_predictions.values.flatten()
+# Inverse transform back to original case counts
+final_hybrid_predictions = np.expm1(np.array(hybrid_preds_log))
+actual_values = np.expm1(log_test_full.values)
 
-# 3. Calculate absolute residuals and reconstruct a clean Pandas Series
-test_residuals_array = raw_test_actuals - raw_test_baseline
-test_residuals = pd.Series(test_residuals_array)
-
-# 4. Construct the supervised testing matrix
-# The function will now iterate over the exact dimensions required
-X_test, y_test = create_supervised_features(test_residuals, lag=temporal_lag)
-
-# 5. Generate non-linear error predictions via the trained XGBoost model
-print("Executing XGBoost non-linear regression mapping...")
-test_residual_predictions = xgb_model.predict(X_test)
-
-# 6. Recombine the components to construct the ultimate hybrid forecast
-# Align the linear baseline array by systematically discarding the initial 'lag' days
-aligned_linear_predictions = raw_test_baseline[temporal_lag:]
-final_hybrid_predictions = aligned_linear_predictions + test_residual_predictions
-
-# 7. Quantify the final architectural performance
-actual_values = raw_test_actuals[temporal_lag:]
+# Quantify performance
 mae = mean_absolute_error(actual_values, final_hybrid_predictions)
 rmse = np.sqrt(mean_squared_error(actual_values, final_hybrid_predictions))
 
 print(f"Hybrid Architecture MAE:  {mae:.4f}")
 print(f"Hybrid Architecture RMSE: {rmse:.4f}")
 
-
-                   #6: Empirical Visualization and Temporal Verification
-
-import matplotlib.pyplot as plt
-
+# 5. Empirical Visualization
 plt.figure(figsize=(14, 6))
 plt.plot(actual_values, label='Actual Historical Cases', color='blue', linewidth=2, alpha=0.7)
-plt.plot(final_hybrid_predictions, label='Hybrid ARIMA-XGBoost Forecast', color='red', linestyle='--', linewidth=2)
+plt.plot(final_hybrid_predictions, label='Log-Hybrid ARIMA-XGBoost Forecast', color='red', linestyle='--', linewidth=2)
 
-plt.title('Epidemiological Forecasting: Hybrid ARIMA-XGBoost vs. Actuals')
+plt.title('Epidemiological Forecasting: Log-Transformed Hybrid Model vs. Actuals')
 plt.xlabel('Temporal Testing Window (Days)')
 plt.ylabel('Daily Confirmed Cases')
 plt.legend(loc='upper right')
@@ -132,16 +119,7 @@ plt.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.show()
 
-                                 #7: Model Serialization and Export
-
-import joblib
-
-# 1. Serialize the statistical Auto-ARIMA model
-print("Exporting statistical baseline...")
+# 6. Model Serialization
 joblib.dump(arima_model, 'hybrid_arima_core.pkl')
-
-# 2. Serialize the non-linear XGBoost regressor
-print("Exporting non-linear regressor...")
 joblib.dump(xgb_model, 'hybrid_xgb_residual.pkl')
-
-print("Architectural components successfully serialized for deployment.")
+print("Models successfully exported.")

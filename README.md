@@ -5,13 +5,19 @@
 
 A CPU-optimized, decoupled hybrid forecasting architecture designed to predict infectious disease transmission trajectories by combining statistical linear extraction with machine learning-driven residual mapping.
 
+### 1. Comprehensive Presentation Talking Points
+Use these structured talking points to articulate the project's technical depth, architectural innovation, and resolution of empirical challenges during a review or presentation:
+
+* * Architectural Motivation & Decoupled Design:
+* ** Epidemiological time-series exhibit a dual nature: deterministic linear baselines mixed with highly non-linear, volatile stochastic variance (outbreaks and sudden reporting spikes).
+* **  Traditional monolithic models collapse under this complexity. Our hybrid framework decouples the problem by extracting the linear trajectory via an Auto-ARIMA engine ($\text{ARIMA}(5,1,4)$) and mapping unexplainable errors using a CPU-optimized XGBoost regressor.
 ---
 
 ## 1. Core Innovation & Competitive Advantage
 
 * **Decoupled Variance Mapping:** Unlike monolithic architectures that attempt to model all variance simultaneously, this framework isolates residuals from a statistical baseline, transforming unexplainable noise into a secondary supervised learning target.
-* **Resource Constraint Optimization:** Designed specifically for CPU-bound environments, the pipeline leverages parallelized tree-building algorithms rather than heavy recurrent neural networks (RNN/LSTM), making it optimal for rapid academic deployment and resource-limited settings.
-* **Temporal Sliding-Window Formulation:** The architecture dynamically engineers sequential lag predictors from one-dimensional temporal residuals, capturing reporting cyclicality without inducing data leakage.
+* **Log-Variance Stabilization:** Employs logarithmic transformation to compress extreme multi-order epidemiological spikes, enabling robust tree-based generalization during out-of-distribution surges.
+* **Resource Constraint Optimization:** Leverages parallelized tree-building algorithms optimized for CPU-bound environments, bypassing heavy deep learning dependencies.
 
 ---
 
@@ -30,39 +36,37 @@ The foundational assumption defines an epidemiological time-series vector $Y_t$ 
 
 $$Y_t = L_t + N_t$$
 
-### Phase 1: Deterministic Linear Extraction
-The statistical layer utilizes an Auto-ARIMA algorithm that iterates through a hyperparameter search space minimizing the Akaike Information Criterion (AIC). Utilizing the backward shift operator $B$, the structural formulation is defined as:
-
-$$\phi_p(B)(1-B)^d L_t = \theta_q(B)\epsilon_t$$
-
-where $\phi_p$ represents the autoregressive parameters, $d$ dictates the degree of differencing required for stationarity, and $\theta_q$ represents the moving average components.
+### Phase 1: Variance Stabilization & Linear Extraction
+To manage extreme epidemiological shocks, data is stabilized in log-space:
+$$Y_t' = \log(Y_t + 1)$$
+The Auto-ARIMA algorithm minimizes the Akaike Information Criterion (AIC) using the backward shift operator $B$:
+$$\phi_p(B)(1-B)^d L_t' = \theta_q(B)\epsilon_t$$
 
 ### Phase 2: Stochastic Residual Isolation & Supervised Mapping
-Following linear extraction, the unmapped residual variance $e_t$ is isolated:
+The unmapped residual variance $e_t$ is isolated:
+$$e_t = Y_t' - \hat{L}_t'$$
+This sequence is transformed into a supervised matrix using a 7-day sliding lag window ($k = 7$) for the XGBoost regressor.
 
-$$e_t = Y_t - \hat{L}_t$$
-
-This one-dimensional residual vector is transformed into a two-dimensional supervised matrix using a 7-day sliding temporal lag window ($k = 7$). The XGBoost regressor maps the non-linear errors across this temporal window.
-
-### Phase 3: Hybrid Recombination
-The final integrated forecast is synthesized by combining the output of both independent layers:
-
-$$\hat{Y}_t = \hat{L}_t + f(e_{t-1}, e_{t-2}, \dots, e_{t-k})$$
+### Phase 3: Dampened Hybrid Recombination
+The final forecast is reconstructed via dampened rolling residual addition and inverse transformation:
+$$\hat{Y}_t = \exp\left(\hat{L}_t' + d \cdot f(e_{t-1}, \dots, e_{t-k})\right) - 1$$
+where $d$ represents the dampening factor preventing peak overshooting.
 
 ---
 
 ## 4. Empirical Prediction Results
 
-The architecture was evaluated across out-of-sample validation sequences, yielding the following performance metrics:
+The architecture was evaluated across out-of-sample(unkown sample) validation sequences, yielding the following performance metrics:
 
 * **Validation Mean Absolute Error (MAE):** $83.48$
 * **Validation Root Mean Squared Error (RMSE):** $85.34$
 
 The tight convergence between MAE and RMSE indicates robust generalization capabilities, demonstrating that the gradient boosting layer effectively mitigates extreme prediction errors and captures stochastic variance without overfitting.
 
----
+### Epidemilogical forecasting  Hybrid ARIMA_XGBoost vs Actuals Graph Visualization
 <img src="./images/Epidemilogical forecasting  Hybrid ARIMA_XGBoost vs Actuals.png"  align="center" />
 <br clear="left"/>
+---
 
 ## 5. Local Installation & Execution
 
