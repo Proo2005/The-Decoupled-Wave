@@ -5,14 +5,6 @@
 
 A CPU-optimized, decoupled hybrid forecasting architecture designed to predict infectious disease transmission trajectories by combining statistical linear extraction with machine learning-driven residual mapping.
 
-### 1. Comprehensive Presentation Talking Points
-Use these structured talking points to articulate the project's technical depth, architectural innovation, and resolution of empirical challenges during a review or presentation:
-
-* * Architectural Motivation & Decoupled Design:
-* ** Epidemiological time-series exhibit a dual nature: deterministic linear baselines mixed with highly non-linear, volatile stochastic variance (outbreaks and sudden reporting spikes).
-* **  Traditional monolithic models collapse under this complexity. Our hybrid framework decouples the problem by extracting the linear trajectory via an Auto-ARIMA engine ($\text{ARIMA}(5,1,4)$) and mapping unexplainable errors using a CPU-optimized XGBoost regressor.
----
-
 ## 1. Core Innovation & Competitive Advantage
 
 * **Decoupled Variance Mapping:** Unlike monolithic architectures that attempt to model all variance simultaneously, this framework isolates residuals from a statistical baseline, transforming unexplainable noise into a secondary supervised learning target.
