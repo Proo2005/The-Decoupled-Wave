@@ -6,8 +6,10 @@ from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 import matplotlib.pyplot as plt
 import joblib
+from pathlib import Path
 
-file_path = "dataset/who_dataset.csv"
+project_dir = Path(__file__).resolve().parent
+file_path = project_dir / "dataset" / "who_dataset.csv"
 df = pd.read_csv(file_path)
 df['Date_reported'] = pd.to_datetime(df['Date_reported'])
 df.set_index('Date_reported', inplace=True)
@@ -120,6 +122,8 @@ plt.tight_layout()
 plt.show()
 
 # 6. Model Serialization
-joblib.dump(arima_model, 'hybrid_arima_core.pkl')
-joblib.dump(xgb_model, 'hybrid_xgb_residual.pkl')
+model_dir = Path(__file__).resolve().parent / 'model'
+model_dir.mkdir(exist_ok=True)
+joblib.dump(arima_model, model_dir / 'hybrid_arima_core.pkl')
+joblib.dump(xgb_model, model_dir / 'hybrid_xgb_residual.pkl')
 print("Models successfully exported.")

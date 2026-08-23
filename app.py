@@ -2,14 +2,16 @@ import joblib
 import numpy as np
 from fastapi import FastAPI
 from pydantic import BaseModel
+from pathlib import Path
 
 # 1. Initialize the high-performance asynchronous API
 app = FastAPI(title="Hybrid ARIMA-XGBoost Forecasting API")
 
 # 2. Load the serialized mathematical components from the 'model' subdirectory
 print("Loading serialized architectural weights...")
-arima_model = joblib.load('model/hybrid_arima_core.pkl')
-xgb_model = joblib.load('model/hybrid_xgb_residual.pkl')
+MODEL_DIR = Path(__file__).resolve().parent / "model"
+arima_model = joblib.load(MODEL_DIR / 'hybrid_arima_core.pkl')
+xgb_model = joblib.load(MODEL_DIR / 'hybrid_xgb_residual.pkl')
 
 # 3. Define the strict data validation schema for incoming requests
 class ForecastRequest(BaseModel):
@@ -22,10 +24,10 @@ def generate_forecast(request: ForecastRequest):
     baseline_forecast = arima_model.predict(n_periods=request.forecast_horizon)
     input_residuals = np.array(request.recent_residuals[-7:]).reshape(1, -1)
     error_forecast = xgb_model.predict(input_residuals)
-    final_prediction = baseline_forecast[0] + error_forecast[0]
+    final_prediction = baseline_forecast.iloc[0] + error_forecast[0]
     
     return {
-        "baseline_linear": float(baseline_forecast[0]), 
+        "baseline_linear": float(baseline_forecast.iloc[0]), 
         "non_linear_adjustment": float(error_forecast[0]),
         "hybrid_forecast": float(final_prediction)
     }

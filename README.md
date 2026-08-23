@@ -22,6 +22,7 @@ A CPU-optimized, decoupled hybrid forecasting architecture designed to predict i
 
 ---
 
+
 ## 3. Mathematical Methodology & Deductions
 
 The foundational assumption defines an epidemiological time-series vector $Y_t$ as a composite of a deterministic linear component $L_t$ and a stochastic non-linear component $N_t$:
@@ -50,9 +51,11 @@ where $d$ represents the dampening factor preventing peak overshooting.
 
 The architecture was evaluated across out-of-sample(unkown sample) validation sequences, yielding the following performance metrics:
 
-* **Validation Mean Absolute Error (MAE):** $83.48$
-* **Validation Root Mean Squared Error (RMSE):** $85.34$
-
+* **Validation Mean Absolute Error (MAE):** $3530.6986
+* **Validation Root Mean Squared Error (RMSE):** $201.3090
+* **Test-to-Train RMSE Ratio:** $0.06x
+* **Training sMAPE:** $20.13%
+* **Testing sMAPE;** $69.33%
 The tight convergence between MAE and RMSE indicates robust generalization capabilities, demonstrating that the gradient boosting layer effectively mitigates extreme prediction errors and captures stochastic variance without overfitting.
 
 ### Epidemilogical forecasting  Hybrid ARIMA_XGBoost vs Actuals Graph Visualization
