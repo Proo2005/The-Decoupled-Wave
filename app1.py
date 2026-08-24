@@ -89,12 +89,7 @@ async def predict_next_day(data: PredictionRequest):
         input_matrix = recent_residuals.reshape(1, -1)
         future_adjustment_log = float(xgb_model.predict(input_matrix)[0])
         
-        # pmdarima's predict() returns a pandas Series with a *datetime* index
-        # whenever the underlying model was fit/updated on datetime-indexed
-        # data, so plain [0] positional indexing raises KeyError instead of
-        # returning the forecast. np.asarray(...).ravel()[0] safely extracts
-        # the scalar regardless of whether a Series or plain ndarray comes back.
-        next_step_baseline_log = float(np.asarray(current_arima.predict(n_periods=1)).ravel()[0])
+        next_step_baseline_log = float(current_arima.predict(n_periods=1)[0])
         final_log_pred = next_step_baseline_log + future_adjustment_log
         
         # Predictions in real scale
@@ -138,7 +133,3 @@ async def predict_next_day(data: PredictionRequest):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
-
-# https://api.delphi.cmu.edu/epidata/covidcast/meta?api_key=95c5ad2d22da8

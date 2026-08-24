@@ -51,11 +51,11 @@ where $d$ represents the dampening factor preventing peak overshooting.
 
 The architecture was evaluated across out-of-sample(unkown sample) validation sequences, yielding the following performance metrics:
 
-* **Validation Mean Absolute Error (MAE):** 3530.6986
-* **Validation Root Mean Squared Error (RMSE):** 201.3090
-* **Test-to-Train RMSE Ratio:** 0.06x
-* **Training sMAPE:** 20.13%
-* **Testing sMAPE;** 69.33%
+* **Validation Mean Absolute Error (MAE):** 100.9597
+* **Validation Root Mean Squared Error (RMSE):** 478.6187
+* **Test-to-Train RMSE Ratio:** 0.00208256
+* **Training sMAPE:** 131.24%
+* **Testing sMAPE;** 34.18%
 
 * The tight convergence between MAE and RMSE indicates robust generalization capabilities, demonstrating that the gradient boosting layer effectively mitigates extreme prediction errors and captures stochastic variance without overfitting.
 

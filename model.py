@@ -1,4 +1,7 @@
 # 1. Check, Clean, and Load Dataset
+import matplotlib
+matplotlib.use("Agg")  # safe non-interactive backend; figure is also saved to disk
+
 import pandas as pd
 import numpy as np
 import pmdarima as pm
@@ -16,8 +19,18 @@ df.set_index('Date_reported', inplace=True)
 df.sort_index(inplace=True)
 df_region = df[df['Country'] == 'India']
 
-# Extract target and drop any NaN or infinite values immediately
+# Extract target and drop missing values
 target_series = df_region['New_cases'].dropna()
+
+# WHO data occasionally contains negative values from retroactive corrections
+# (e.g. a single -749 day for India). log1p() of anything < -1 is NaN, so these
+# must be clipped to 0 explicitly rather than being silently dropped later,
+# which would otherwise punch an undocumented hole in the daily time series.
+n_negative = int((target_series < 0).sum())
+if n_negative > 0:
+    print(f"Clipping {n_negative} negative New_cases value(s) to 0 (data corrections).")
+    target_series = target_series.clip(lower=0)
+
 target_series = target_series.replace([np.inf, -np.inf], np.nan).dropna()
 
 print(f"Data successfully loaded. Series shape: {target_series.shape}")
@@ -44,7 +57,7 @@ arima_model = pm.auto_arima(
 print(f"Optimal ARIMA Configuration: {arima_model.order}")
 linear_predictions = arima_model.predict_in_sample()
 residuals = train_series - linear_predictions
-residuals = residuals.dropna() # Ensure no NaNs from ARIMA burn-in period
+residuals = residuals.dropna()  # Ensure no NaNs from ARIMA burn-in period
 
 print(f"Non-linear residuals successfully isolated. Shape: {residuals.shape}")
 
@@ -71,33 +84,61 @@ xgb_model = XGBRegressor(
 xgb_model.fit(X_train, y_train)
 print("XGBoost training complete.")
 
-# 4. Rolling One-Step-Ahead Hybrid Recombination with Dampened Residuals
-print("Generating dampened rolling out-of-sample predictions...")
+# 4. Rolling One-Step-Ahead Hybrid Recombination
+#
+# IMPORTANT: this loop must mirror exactly what app.py does at inference time,
+# otherwise the offline MAE/RMSE reported here don't reflect what the deployed
+# API actually returns.
+#   - The ARIMA baseline for step t must come from the model's own one-step
+#     forecast (predict(n_periods=1)), not from the previous day's raw value.
+#   - The XGBoost input must be a window of ARIMA *residuals*
+#     (actual - ARIMA fitted/forecast), exactly like it was trained on in
+#     step 3 above -- NOT a window of raw log-case values.
+#   - The ARIMA model must be updated with each new true observation as we
+#     roll forward, exactly like app.py's current_arima.update(...) call.
+#   - No dampening factor is applied, since app.py applies none; keeping the
+#     two in sync is what makes this evaluation meaningful.
+print("Generating rolling out-of-sample predictions...")
 
-log_train_full = log_target_series[:train_size]
 log_test_full = log_target_series[train_size:]
 
-full_series = log_target_series.values
+rolling_arima = arima_model  # continues from the fit produced in step 2
+residual_history = list(residuals.values)  # seed with in-sample training residuals
+
 hybrid_preds_log = []
-dampening_factor = 0.45  # Scales back over-correction during rapid surges
+baseline_preds_log = []
 
 for i in range(len(log_test_full)):
-    current_idx = train_size + i
-    history = full_series[:current_idx]
-    
-    if len(history) >= temporal_lag:
-        lag_window = history[-temporal_lag:]
-        next_residual_pred = xgb_model.predict(lag_window.reshape(1, -1))[0]
+    # ARIMA one-step-ahead baseline forecast.
+    # NOTE: pmdarima's predict() returns a pandas Series with a *datetime*
+    # index when the model was fit on a datetime-indexed series, so naive
+    # [0] positional indexing raises KeyError. np.asarray(...).ravel()[0]
+    # safely extracts the scalar regardless of whether a Series or a plain
+    # ndarray is returned (the return type can change after .update()).
+    baseline_log = float(np.asarray(rolling_arima.predict(n_periods=1)).ravel()[0])
+    baseline_preds_log.append(baseline_log)
+
+    # XGBoost residual correction, using the most recent `temporal_lag` residuals
+    if len(residual_history) >= temporal_lag:
+        lag_window = np.array(residual_history[-temporal_lag:]).reshape(1, -1)
+        residual_pred = float(xgb_model.predict(lag_window)[0])
     else:
-        next_residual_pred = 0.0
-        
-    base_val = history[-1]
-    # Apply dampening to prevent overshooting peaks
-    pred_log = base_val + (next_residual_pred * dampening_factor)
+        residual_pred = 0.0
+
+    pred_log = baseline_log + residual_pred
     hybrid_preds_log.append(pred_log)
+
+    # Reveal the true value for this step, then update ARIMA and the
+    # residual history so the next iteration forecasts from real history
+    true_log_val = float(log_test_full.iloc[i])
+    rolling_arima.update([true_log_val])
+
+    true_residual = true_log_val - baseline_log
+    residual_history.append(true_residual)
 
 # Inverse transform back to original case counts
 final_hybrid_predictions = np.expm1(np.array(hybrid_preds_log))
+final_hybrid_predictions = np.clip(final_hybrid_predictions, 0, None)
 actual_values = np.expm1(log_test_full.values)
 
 # Quantify performance
@@ -109,16 +150,19 @@ print(f"Hybrid Architecture RMSE: {rmse:.4f}")
 
 # 5. Empirical Visualization
 plt.figure(figsize=(14, 6))
-plt.plot(actual_values, label='Actual Historical Cases', color='blue', linewidth=2, alpha=0.7)
-plt.plot(final_hybrid_predictions, label='Log-Hybrid ARIMA-XGBoost Forecast', color='red', linestyle='--', linewidth=2)
+plt.plot(test_series.index, actual_values, label='Actual Historical Cases', color='blue', linewidth=2, alpha=0.7)
+plt.plot(test_series.index, final_hybrid_predictions, label='Log-Hybrid ARIMA-XGBoost Forecast', color='red', linestyle='--', linewidth=2)
 
 plt.title('Epidemiological Forecasting: Log-Transformed Hybrid Model vs. Actuals')
-plt.xlabel('Temporal Testing Window (Days)')
+plt.xlabel('Date')
 plt.ylabel('Daily Confirmed Cases')
 plt.legend(loc='upper right')
 plt.grid(True, alpha=0.3)
-
 plt.tight_layout()
+
+output_dir = Path(__file__).resolve().parent
+plt.savefig(output_dir / 'forecast_plot.png', dpi=150)
+print(f"Plot saved to {output_dir / 'forecast_plot.png'}")
 plt.show()
 
 # 6. Model Serialization
